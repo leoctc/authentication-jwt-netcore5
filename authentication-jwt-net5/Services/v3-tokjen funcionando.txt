@@ -1,0 +1,48 @@
+ //v3
+        public string GenerateToken(IConfiguration configuration, long cdTitular, long complementoCheckSum)
+        {
+            #region Variables
+
+            string societyIssuer = configuration.GetSection("JWTParameters").GetSection("SocietyIssuer").Value;
+            string aud = configuration.GetSection("JWTParameters").GetSection("Audience").Value;
+            string urlSession = configuration.GetSection("UrlSession").Value;
+            string pathPublicPem = Directory.GetCurrentDirectory() + @"\\Security\\rsa-public.pem";
+            string pathPrivatePem = Directory.GetCurrentDirectory() + @"\\Security\\rsa-private.pem";
+            var utcNow = DateTimeOffset.Now.ToUnixTimeSeconds();
+            var expDate = DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds();
+            string rsaPublicKey = ReadPemFile(pathPublicPem);
+            string rsaPrivateKey = ReadPemFile(pathPrivatePem);
+
+            #endregion
+
+            // ====================== checksumKey ========================
+
+            string checksum = utcNow + ",PUT," + urlSession + cdTitular + "," + complementoCheckSum;
+            var checksumJson = new { checksum = GetSHA256Hash(checksum) };
+
+            // ======================/checksumKey/========================
+
+            // ======================== RSA keys =========================         
+            
+
+            var signingCredentials = new SigningCredentials(CreateRsaSecurityKey(rsaPrivateKey), SecurityAlgorithms.RsaSha256)
+            {
+                CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false }               
+            };
+
+            // =========================/RSA keys/=========================
+          
+           
+            var header = new JwtHeader(signingCredentials);
+
+            var payload = new JwtPayload() {
+                    { "iss", societyIssuer },
+                    { "aud", aud },
+                    { "iat", utcNow },
+                    { "exp", expDate },
+                    { "data", checksumJson }
+                };
+
+            var token = new JwtSecurityToken(header, payload);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
